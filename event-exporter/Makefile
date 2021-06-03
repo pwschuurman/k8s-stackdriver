@@ -17,9 +17,9 @@ all: container
 ENVVAR = GOOS=linux GOARCH=amd64 CGO_ENABLED=0
 BINARY_NAME = event-exporter
 
-PREFIX = staging-k8s.gcr.io
+PREFIX ?= staging-k8s.gcr.io
 IMAGE_NAME = event-exporter
-TAG = v0.3.4
+TAG ?= v0.3.4
 
 build:
 	${ENVVAR} go build -mod=vendor -a -o ${BINARY_NAME}
@@ -30,8 +30,21 @@ test:
 container:
 	docker build --pull -t ${PREFIX}/${IMAGE_NAME}:${TAG} .
 
+container-multiarch:
+	docker buildx build . --pull -t ${PREFIX}/${IMAGE_NAME}-amd64:${TAG} --platform=linux/amd64 --load
+	docker buildx build . --pull -t ${PREFIX}/${IMAGE_NAME}-arm64:${TAG} --platform=linux/arm64 --load
+
 push: container
 	gcloud docker -- push ${PREFIX}/${IMAGE_NAME}:${TAG}
+
+push-multiarch: container-multiarch
+	docker push ${PREFIX}/${IMAGE_NAME}-amd64:${TAG}
+	docker push ${PREFIX}/${IMAGE_NAME}-arm64:${TAG}
+
+	docker manifest create --amend ${PREFIX}/${IMAGE_NAME}:${TAG} ${PREFIX}/${IMAGE_NAME}-amd64:${TAG} ${PREFIX}/${IMAGE_NAME}-arm64:${TAG}
+	docker manifest annotate --os=linux --arch=amd64 ${PREFIX}/${IMAGE_NAME}:${TAG} ${PREFIX}/${IMAGE_NAME}-amd64:${TAG}
+	docker manifest annotate --os=linux --arch=arm64 ${PREFIX}/${IMAGE_NAME}:${TAG} ${PREFIX}/${IMAGE_NAME}-arm64:${TAG}
+	docker manifest push ${PREFIX}/${IMAGE_NAME}:${TAG}
 
 clean:
 	rm -rf ${BINARY_NAME}
