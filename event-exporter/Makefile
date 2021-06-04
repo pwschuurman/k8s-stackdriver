@@ -28,7 +28,7 @@ test:
 	${ENVVAR} go test -mod=vendor ./...
 
 container:
-	docker build --pull -t ${PREFIX}/${IMAGE_NAME}:${TAG} .
+	docker buildx build . --pull -t ${PREFIX}/${IMAGE_NAME}:${TAG} --load
 
 container-multiarch:
 	docker buildx build . --pull -t ${PREFIX}/${IMAGE_NAME}-amd64:${TAG} --platform=linux/amd64 --load
