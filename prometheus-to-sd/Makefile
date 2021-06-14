@@ -15,8 +15,9 @@
 all: build
 
 ENVVAR = GOOS=linux GOARCH=amd64 CGO_ENABLED=0
-PREFIX = staging-k8s.gcr.io
-TAG = v0.11.1
+IMAGE_NAME=prometheus-to-sd
+PREFIX ?= staging-k8s.gcr.io
+TAG ?= v0.11.1
 
 build:
 	$(ENVVAR) go build -mod=vendor -a -o monitor
@@ -25,10 +26,23 @@ test:
 	$(ENVVAR) go test -mod=vendor ./...
 
 container:
-	docker build --pull -t ${PREFIX}/prometheus-to-sd:$(TAG) .
+	docker buildx build . --pull -t ${PREFIX}/${IMAGE_NAME}:$(TAG)
+
+container-multiarch:
+	docker buildx build . --pull -t ${PREFIX}/${IMAGE_NAME}-amd64:${TAG} --platform=linux/amd64 --load
+	docker buildx build . --pull -t ${PREFIX}/${IMAGE_NAME}-arm64:${TAG} --platform=linux/arm64 --load
 
 push: container
-	gcloud docker -- push ${PREFIX}/prometheus-to-sd:$(TAG)
+	gcloud docker -- push ${PREFIX}/${IMAGE_NAME}:$(TAG)
+
+push-multiarch: container-multiarch
+	docker push ${PREFIX}/${IMAGE_NAME}-amd64:${TAG}
+	docker push ${PREFIX}/${IMAGE_NAME}-arm64:${TAG}
+
+	docker manifest create --amend ${PREFIX}/${IMAGE_NAME}:${TAG} ${PREFIX}/${IMAGE_NAME}-amd64:${TAG} ${PREFIX}/${IMAGE_NAME}-arm64:${TAG}
+	docker manifest annotate --os=linux --arch=amd64 ${PREFIX}/${IMAGE_NAME}:${TAG} ${PREFIX}/${IMAGE_NAME}-amd64:${TAG}
+	docker manifest annotate --os=linux --arch=arm64 ${PREFIX}/${IMAGE_NAME}:${TAG} ${PREFIX}/${IMAGE_NAME}-arm64:${TAG}
+	docker manifest push ${PREFIX}/${IMAGE_NAME}:${TAG}
 
 clean:
 	rm -rf monitor
